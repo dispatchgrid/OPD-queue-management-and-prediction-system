@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OPD Attendant Panel</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: url('https://images.unsplash.com/photo-1586773860418-d37222d8fce3') no-repeat center center/cover;
+        }
+
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            background: rgba(255, 255, 255, 0.4);
+            backdrop-filter: blur(8px);
+            z-index: 0;
+        }
+
+        .container {
+            position: relative;
+            z-index: 1;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 20px 30px;
+            border-radius: 12px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+            width: 600px;
+        }
+
+        h1 {
+            text-align: center;
+            color: #00695c;
+            margin-bottom: 10px;
+        }
+
+        .current-token {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #004d40;
+            text-align: center;
+            margin-bottom: 15px;
+            padding: 10px;
+            border: 2px solid #b2dfdb;
+            border-radius: 8px;
+            background: #e0f2f1;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+
+        button {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .complete-btn {
+            background: #2e7d32;
+            color: white;
+        }
+
+        .complete-btn:hover {
+            background: #1b5e20;
+        }
+
+        .late-btn {
+            background: #c62828;
+            color: white;
+        }
+
+        .late-btn:hover {
+            background: #8e0000;
+        }
+
+        .add-late {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .add-late input {
+            flex: 1;
+            padding: 10px;
+            border: 2px solid #b2dfdb;
+            border-radius: 8px;
+            font-size: 1rem;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+
+        th, td {
+            border: 1px solid #ccc;
+            padding: 8px;
+            text-align: center;
+        }
+
+        th {
+            background: #00796b;
+            color: white;
+        }
+
+        .popup {
+            display: none;
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #ff9800;
+            color: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            font-weight: bold;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+            animation: fadeIn 0.5s ease-in-out;
+            z-index: 999;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>OPD Attendant Panel</h1>
+
+
+    <div id="currentToken" class="current-token">Next Token: --</div>
+
+
+    <div class="btn-group">
+        <button class="complete-btn" id="nextBtn">📢 Next</button>
+        <button class="late-btn" id="lateBtn">⏳ Mark Late</button>
+    </div>
+
+
+    <div class="add-late">
+        <input type="number" id="lateTokenInput" placeholder="Enter returned late token">
+        <button class="complete-btn" id="addLateBtn">Add to Late Queue</button>
+    </div>
+
+
+    <h2>Late Queue</h2>
+    <table id="lateTable">
+        <thead>
+        <tr>
+            <th>Token</th>
+            <th>Phone</th>
+        </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+</div>
+
+
+<div id="popup" class="popup"></div>
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<script>
+    const SUPABASE_URL = "https://kaxaggpkltuzeoxlgqhv.supabase.co";
+    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtheGFnZ3BrbHR1emVveGxncWh2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTgwMTA2NDksImV4cCI6MjA3MzU4NjY0OX0.2-ai2WKgV8lBgJxroJR8Atd3rzxrg5jo085E5UDwCr4";
+    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    const currentTokenDiv = document.getElementById("currentToken");
+    const nextBtn = document.getElementById("nextBtn");
+    const lateBtn = document.getElementById("lateBtn");
+    const lateTableBody = document.querySelector("#lateTable tbody");
+    const popupDiv = document.getElementById("popup");
+    const lateTokenInput = document.getElementById("lateTokenInput");
+    const addLateBtn = document.getElementById("addLateBtn");
+
+    let currentToken = null;
+    let normalCountSinceLate = 0;
+    let lateInterval = 10;
+    let lateModeActive = false;
+
+    function toast(msg, color = "#ff9800") {
+        popupDiv.textContent = msg;
+        popupDiv.style.background = color;
+        popupDiv.style.display = "block";
+        setTimeout(() => {
+            popupDiv.style.display = "none";
+            popupDiv.style.background = "#ff9800";
+        }, 3000);
+    }
+
+    async function loadSettings() {
+        const {data, error} = await supabaseClient
+            .from("queue_settings")
+            .select("missed_call_interval")
+            .limit(1);
+        if (!error && data && data.length) {
+            lateInterval = data[0].missed_call_interval || lateInterval;
+        }
+    }
+
+    async function loadLateQueue() {
+        const {data, error} = await supabaseClient
+            .from("missed_queue")
+            .select("patient_id, patients(phone)")
+            .order("missed_id", {ascending: true});
+        if (error) return;
+        lateTableBody.innerHTML = (data || [])
+            .map(l => `<tr><td>${l.patient_id}</td><td>${l.patients?.phone ?? "-"}</td></tr>`)
+            .join("");
+    }
+
+    async function callNextPatient() {
+        if (lateModeActive) return;
+        const {data, error} = await supabaseClient
+            .from("patients")
+            .select("patient_id")
+            .eq("status", "waiting")
+            .order("patient_id", {ascending: true})
+            .limit(1);
+        if (!error && data && data.length) {
+            currentToken = data[0].patient_id;
+            currentTokenDiv.textContent = `Current Token: ${currentToken}`;
+            await supabaseClient
+                .from("patients")
+                .update({status: "called", called_at: new Date().toISOString()})
+                .eq("patient_id", currentToken);
+            await supabaseClient
+                .from("time_stamps")
+                .insert([{}]);
+
+
+        } else {
+            currentToken = null;
+            currentTokenDiv.textContent = "No patients waiting";
+        }
+    }
+
+    async function showLatePopup(tokenId) {
+        popupDiv.textContent = `📢 Call Late Token: ${tokenId} (Click Next to finish)`;
+        popupDiv.style.background = "#ff9800";
+        popupDiv.style.display = "block";
+        lateModeActive = true;
+        currentToken = tokenId;
+        currentTokenDiv.textContent = `Current Token: ${tokenId} (Late)`;
+        supabaseClient
+            .from("patients")
+            .update({status: "called", called_at: new Date().toISOString()})
+            .eq("patient_id", tokenId);
+        await supabaseClient
+            .from("time_stamps")
+            .insert([{}]);
+
+    }
+
+    nextBtn.addEventListener("click", async () => {
+        if (!lateModeActive) {
+
+            normalCountSinceLate++;
+            if (normalCountSinceLate >= lateInterval) {
+                const {data: late, error} = await supabaseClient
+                    .from("missed_queue")
+                    .select("patient_id")
+                    .order("missed_id", {ascending: true})
+                    .limit(1);
+                if (!error && late && late.length) {
+                    showLatePopup(late[0].patient_id);
+                    normalCountSinceLate = 0;
+                    return;
+                }
+            }
+            await callNextPatient();
+        } else {
+
+            if (currentToken) {
+                await supabaseClient.from("missed_queue").delete().eq("patient_id", currentToken);
+            }
+            lateModeActive = false;
+            normalCountSinceLate = 0;
+            popupDiv.style.display = "none";
+            await callNextPatient();
+        }
+        await loadLateQueue();
+    });
+
+    lateBtn.addEventListener("click", async () => {
+        if (!currentToken) return;
+        await supabaseClient.from("patients").update({status: "missed"}).eq("patient_id", currentToken);
+        toast(`Token ${currentToken} marked late`, "#c62828");
+        await loadLateQueue();
+        await callNextPatient();
+    });
+
+    addLateBtn.addEventListener("click", async () => {
+        const tokenNum = parseInt(lateTokenInput.value, 10);
+        if (!tokenNum) {
+            toast("Enter a valid token number", "#c62828");
+            return;
+        }
+
+        const {data: patient, error: pErr} = await supabaseClient
+            .from("patients")
+            .select("patient_id, status")
+            .eq("patient_id", tokenNum)
+            .limit(1);
+
+        if (pErr || !patient || !patient.length) {
+            toast("Token not found", "#c62828");
+            return;
+        }
+        const status = patient[0].status;
+        if (status === "completed") {
+            toast("This token is already completed", "#c62828");
+            return;
+        }
+
+        const {data: exists, error: eErr} = await supabaseClient
+            .from("missed_queue")
+            .select("patient_id")
+            .eq("patient_id", tokenNum)
+            .limit(1);
+
+        if (!eErr && exists && exists.length) {
+            toast("Already in late queue");
+            lateTokenInput.value = "";
+            return;
+        }
+
+        const {error: iErr} = await supabaseClient
+            .from("missed_queue")
+            .insert([{patient_id: tokenNum}]);
+
+        if (iErr) {
+            toast("Failed to add to late queue", "#c62828");
+            return;
+        }
+
+        toast(`Added token ${tokenNum} to late queue`, "#2e7d32");
+        lateTokenInput.value = "";
+        await loadLateQueue();
+    });
+
+    async function refreshData() {
+        if (lateModeActive) return;
+        const {data, error} = await supabaseClient
+            .from("patients")
+            .select("patient_id")
+            .eq("status", "waiting")
+            .order("patient_id", {ascending: true})
+            .limit(1);
+        if (!error && data && data.length) {
+            currentToken = data[0].patient_id;
+            currentTokenDiv.textContent = `Current Token: ${currentToken}`;
+
+        } else {
+            currentToken = null;
+            currentTokenDiv.textContent = "No patients waiting";
+        }
+    }
+
+
+    async function loadData() {
+        if (lateModeActive) return;
+        const {data, error} = await supabaseClient
+            .from("patients")
+            .select("patient_id")
+            .eq("status", "waiting")
+            .order("patient_id", {ascending: true})
+            .limit(1);
+        if (!error && data && data.length) {
+            currentToken = data[0].patient_id;
+            currentTokenDiv.textContent = `Click next to get started`;
+
+        } else {
+            currentToken = null;
+            currentTokenDiv.textContent = "No patients waiting";
+        }
+    }
+
+    loadSettings().then(async () => {
+        await loadLateQueue();
+        await loadData();
+    });
+
+    setInterval(() => {
+        loadLateQueue();
+
+    }, 10000);
+    supabaseClient
+        .channel('custom-insert-channel')
+        .on(
+            'postgres_changes',
+            {
+                event: 'INSERT',
+                schema: 'public',
+                table: 'print_queue',
+            },
+            (payload) => {
+                console.log('New row inserted:', payload.new)
+                console.log(payload.new.content);
+                sendToPrinter(payload.new.content, payload.new.id);
+            }
+        )
+        .subscribe()
+
+    async function sendToPrinter(text, id) {
+
+        const res = await fetch("http://localhost:8080/print", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({html: text})
+        });
+        const msg = await res.text();
+        if (msg === "Printed successfully") {
+            const {error} = await supabaseClient
+                .from('print_queue')
+                .delete()
+                .eq('id', id);
+        } else {
+            return false;
+        }
+
+    }
+</script>
+
+</body>
+</html>

@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head><title>Thermal Printer</title></head>
+<body>
+<h2>Send to GA-E200I</h2>
+<textarea id="input" rows="6" cols="40">
+<center>OPD TOKEN<b>548</b></center><medium>ETA:2025/9/23 10:00PM</medium>Phone: 0718440518
+
+
+
+  </textarea><br>
+<button onclick="sendToPrinter()">Print</button>
+
+<script>
+    async function sendToPrinter() {
+        const text = document.getElementById("input").value;
+        const res = await fetch("http://localhost:8080/print", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ html: text })
+        });
+        const msg = await res.text();
+        alert( msg);
+    }
+</script>
+</body>
+</html>

@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/html">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>OPD Token Registration</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: black;
+        }
+
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            background: black;
+
+            backdrop-filter: blur(8px);
+            z-index: 0;
+        }
+
+        .container {
+            position: relative;
+            z-index: 1;
+            background: rgba(0, 0, 0, 0.95);
+            padding: 30px 40px;
+            border-radius: 12px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+        }
+
+        h1 {
+            margin-bottom: 15px;
+            font-size: 1.8rem;
+            color: #00ffe0;
+        }
+
+        .next-token {
+            font-size: 1.6rem;
+            font-weight: bold;
+            color: #004d40;
+            margin-bottom: 20px;
+            padding: 12px;
+            border: 2px solid #b2dfdb;
+            border-radius: 8px;
+            background: #e0f2f1;
+
+        }
+
+        .keyboard-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .key {
+            padding: 16px;
+            font-size: 2rem;
+            background: #00796b;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            font-family: 'Courier New', monospace;
+
+        }
+        .key:active{
+            background: #00bfa5;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4);
+            transform: scale(0.98);
+        }
+
+        #result {
+            margin-top: 20px;
+            font-weight: bold;
+            font-size: 1.2rem;
+            min-height: 1.4em;
+        }
+
+        .success {
+            color: #2e7d32;
+        }
+
+        .error {
+            color: #c62828;
+        }
+
+        .number {
+            font-family: 'Courier New', monospace;
+            letter-spacing: 2px;
+        }
+        .skip-button {
+            grid-column: span 3;
+        }
+
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>OPD Counter</h1>
+    <form id="registerForm" autocomplete="off">
+        <div id="nextToken" class="next-token">Next Token: --</div>
+        <input type="hidden" id="phone" name="phone" class="number"/>
+        <div id="phoneDisplay" class="next-token number">07XXXXXXXX</div>
+        <audio id="tone" src="resources/ding.wav" preload="auto"></audio>
+
+        <div class="keyboard-grid">
+            <button type="button" id="1" class="key">1</button>
+            <button type="button" id="2" class="key">2</button>
+            <button type="button" id="3" class="key">3</button>
+            <button type="button" id="4" class="key">4</button>
+            <button type="button" id="5" class="key">5</button>
+            <button type="button" id="6" class="key">6</button>
+            <button type="button" id="7" class="key">7</button>
+            <button type="button" id="8" class="key">8</button>
+            <button type="button" id="9" class="key">9</button>
+            <button type="button" class="key" id="clear"><span style="color:#6a0000">X</span></button>
+            <button type="button" id="0" class="key">0</button>
+
+            <button type="button" class="key" id="submit"><span style="color:#7dff00">✔</span></button>
+            <button type="button" class="key skip-button"><span style="color:#ff8f00">SKIP</span></button>
+        </div>
+
+        <button type="submit" id="registerBtn" style="display: none">Register</button>
+    </form>
+
+    <div id="result"></div>
+</div>
+
+<script>
+    const phoneInput = document.getElementById("phone");
+    const phoneDisplay = document.getElementById("phoneDisplay");
+    const form = document.getElementById("registerForm");
+    const resultDiv = document.getElementById("result");
+    let phoneNumber = "";
+
+    document.body.addEventListener("keypress", (e) => {
+        try{
+            console.log(e.key);
+            if (e.which == 13) {
+                e.preventDefault();
+                document.getElementById("submit").click();
+                return;
+            }
+            document.getElementById(e.key).click();
+        }catch (e) {
+
+        }
+    });
+
+    document.querySelectorAll(".key").forEach(btn => {
+        btn.addEventListener("click", () => {
+            const val = btn.textContent;
+
+            if (val === "X") {
+                phoneNumber = phoneNumber.slice(0, -1);
+            } else if (val === "✔") {
+                if (/^07\d{8}$/.test(phoneNumber)) {
+                    phoneInput.value = phoneNumber;
+
+                    form.dispatchEvent(new Event("submit", {bubbles: true, cancelable: true}));
+                } else {
+                    resultDiv.textContent = "Invalid number";
+                    resultDiv.className = "error";
+                }
+            } else if (val === "SKIP") {
+                phoneNumber = "0700000000";
+                phoneInput.value = phoneNumber;
+
+                form.dispatchEvent(new Event("submit", {bubbles: true, cancelable: true}));
+
+            } else {
+                if (phoneNumber.length < 10) {
+
+                    phoneNumber += val;
+                    playDTMF(val);
+
+                }
+
+            }
+
+            phoneDisplay.textContent = phoneNumber.padEnd(10, "X");
+        });
+    });
+    const dtmfFrequencies = {
+        '1': [697, 1209],
+        '2': [697, 1336],
+        '3': [697, 1477],
+        '4': [770, 1209],
+        '5': [770, 1336],
+        '6': [770, 1477],
+        '7': [852, 1209],
+        '8': [852, 1336],
+        '9': [852, 1477],
+        '0': [941, 1336]
+    };
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+
+    function playDTMF(digit) {
+
+        const [f1, f2] = dtmfFrequencies[digit];
+        const osc1 = ctx.createOscillator();
+        const osc2 = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc1.frequency.value = f1;
+        osc2.frequency.value = f2;
+        osc1.type = 'sine';
+        osc2.type = 'sine';
+
+        gain.gain.cancelScheduledValues(ctx.currentTime);
+        gain.gain.setValueAtTime(0.25, ctx.currentTime);
+
+        osc1.connect(gain);
+        osc2.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc1.start();
+        osc2.start();
+        osc1.stop(ctx.currentTime + 0.15);
+        osc2.stop(ctx.currentTime + 0.15);
+    }
+
+    function playConfirmationTone() {
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0.25, ctx.currentTime);
+        gain.connect(ctx.destination);
+
+        const buu = ctx.createOscillator();
+        buu.type = 'sine';
+        buu.frequency.setValueAtTime(440, ctx.currentTime);
+        buu.connect(gain);
+        buu.start(ctx.currentTime);
+        buu.stop(ctx.currentTime + 0.4);
+
+        const beee = ctx.createOscillator();
+        beee.type = 'sine';
+        beee.frequency.setValueAtTime(880, ctx.currentTime + 0.2);
+        beee.connect(gain);
+        beee.start(ctx.currentTime + 0.5);
+        beee.stop(ctx.currentTime + 1);
+    }
+
+</script>
+
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<script>
+
+    const SUPABASE_URL = "https://kaxaggpkltuzeoxlgqhv.supabase.co";
+    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtheGFnZ3BrbHR1emVveGxncWh2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTgwMTA2NDksImV4cCI6MjA3MzU4NjY0OX0.2-ai2WKgV8lBgJxroJR8Atd3rzxrg5jo085E5UDwCr4";
+    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    const nextTokenDiv = document.getElementById("nextToken");
+    const registerBtn = document.getElementById("registerBtn");
+
+    async function refreshNextToken() {
+        const {data, error} = await supabaseClient
+            .from("patients")
+            .select("patient_id")
+            .order("patient_id", {ascending: false})
+            .limit(1);
+
+        if (error) {
+            console.error(error);
+            nextTokenDiv.textContent = "Next Token: --";
+            return;
+        }
+        const lastId = (data && data.length > 0) ? data[0].patient_id : 0;
+        nextTokenDiv.textContent = `Next Token: ${lastId + 1}`;
+    }
+
+    refreshNextToken();
+
+    phoneInput.addEventListener("input", () => {
+        resultDiv.textContent = "";
+        resultDiv.className = "";
+    });
+
+    phoneInput.addEventListener("keypress", (e) => {
+        if (e.key === "Enter") {
+            e.preventDefault();
+            form.requestSubmit();
+        }
+    });
+
+    supabaseClient
+        .channel('custom-insert-channel')
+        .on(
+            'postgres_changes',
+            {
+                event: 'INSERT',
+                schema: 'public',
+                table: 'sms_queue',
+            },
+            (payload) => {
+                console.log('New row inserted:', payload.new)
+            }
+        )
+        .subscribe()
+
+    form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+
+        const phone = phoneInput.value.trim();
+
+        if (!/^07\d{8}$/.test(phone)) {
+            resultDiv.textContent = "❌ Invalid phone number format.";
+            resultDiv.className = "error fade-in";
+            return;
+        }
+
+        registerBtn.disabled = true;
+        registerBtn.innerHTML = `<div class="spinner"></div> Registering...`;
+
+        const {data, error} = await supabaseClient
+            .from("patients")
+            .insert([{phone: phone, status: "waiting"}])
+            .select("patient_id");
+
+        registerBtn.disabled = false;
+        registerBtn.textContent = "Register";
+
+        if (error) {
+            console.error(error);
+            resultDiv.textContent = "❌ Error registering patient.";
+            resultDiv.className = "error fade-in";
+            return;
+        }
+
+        const token = data[0].patient_id;
+
+        document.getElementById("tone").play();
+
+        form.reset();
+        phoneInput.focus();
+
+        nextTokenDiv.textContent = `Next Token: ${token + 1}`;
+
+        console.log("🔍 Requesting prediction for token:", token);
+
+        const {data: prediction, error: predictErr} = await supabaseClient
+            .rpc("predict_token_wait", {target_token: token});
+
+        if (predictErr || !prediction || prediction.length === 0) {
+            console.error("❌ Prediction error:", predictErr);
+            console.log("📭 Prediction response:", prediction);
+            return;
+        }
+
+        console.log("✅ Prediction result:", prediction[0]);
+
+        const intervalString = prediction[0].estimated_wait;
+        console.log("⏱️ Raw interval string:", intervalString);
+
+        let estimatedMinutes = 5;
+        if (typeof intervalString === 'string' && intervalString.includes(':')) {
+            const parts = intervalString.split(':');
+            const hours = parseInt(parts[0]);
+            const minutes = parseInt(parts[1]);
+            estimatedMinutes = (hours * 60) + minutes;
+        } else {
+            console.warn("⚠️ Unexpected interval format:", intervalString);
+        }
+
+        console.log("🧮 Estimated wait time (minutes):", estimatedMinutes);
+
+        const estimatedCallTime = new Date(Date.now() + estimatedMinutes * 60000);
+        console.log("📅 Estimated call time:", estimatedCallTime.toString());
+
+        const hours = estimatedCallTime.getHours();
+        const minutes = estimatedCallTime.getMinutes();
+        const ampm = hours >= 12 ? 'PM' : 'AM';
+        const displayHours = ((hours + 11) % 12 + 1);
+        const displayMinutes = minutes.toString().padStart(2, '0');
+        const timeString = `${displayHours}:${displayMinutes}${ampm}`;
+
+        console.log("🕒 Formatted time string:", timeString);
+        resultDiv.innerHTML = `✅<br>Booked: ${token}<br>Estimated time: ${timeString}`;
+        resultDiv.className = "success fade-in";
+
+        if (phone === "0700000000") {
+            console.log("⏭️ Skipping SMS for placeholder number.");
+            phoneNumber = "";
+            phoneDisplay.textContent = "07XXXXXXXX";
+            return;
+        }
+        const message1 =
+            `Dear patient,\n` +
+            `Your token: #${token}\n` +
+            `ETA: ${timeString}\n`+
+            `After service feedback:https://netsoolink.github.io/OQMPS/feedback-form.html?uuid=${generateRandomString(10)}`;
+
+        console.log("WEBVIEWCOM:" + phone + ":" + message1);
+
+        const year = estimatedCallTime.getFullYear();
+        const month = (estimatedCallTime.getMonth() + 1).toString().padStart(2, '0');
+        const day = estimatedCallTime.getDate().toString().padStart(2, '0');
+        const hour24 = hours.toString().padStart(2, '0');
+        const timeStringPrinting = `${year}/${month}/${day} ${hour24}:${displayMinutes}`;
+
+        var content = `<center>OPD TOKEN<b>${token}</b></center><medium>ETA:${timeStringPrinting}</medium>Phone: ${phone}`;
+        const { dataPrintQueue, errorPrintQueue } = await supabaseClient
+            .from('print_queue')
+            .insert([{ content }]);
+        phoneNumber = "";
+        phoneDisplay.textContent = "07XXXXXXXX";
+
+    });
+
+    async function getPredictionForNextToken(phone) {
+
+        const { data: waitingPatients, error: waitingError } = await supabaseClient
+            .from("patients")
+            .select("patient_id", { count: "exact" })
+            .eq("status", "waiting");
+
+        const waitingCount = waitingPatients?.length ?? 0;
+
+        const { data: completedPatients, error: completedError } = await supabaseClient
+            .from("patients")
+            .select("patient_id")
+            .eq("status", "called")
+            .order("patient_id", { ascending: false })
+            .limit(1);
+
+        const highestCompletedId = completedPatients?.[0]?.patient_id ?? null;
+        console.log("Highest completed ID:", highestCompletedId);
+        console.log("Waiting patients count:", waitingCount);
+        if (waitingError || completedError) {
+            console.error(waitingError);
+            console.error(completedError);
+
+            return;
+        }
+        if (waitingCount === 0 || highestCompletedId === null) {
+            console.log(`WEBVIEWCOM:${phone}:No waiting patients or no completed patients found.`);
+            return;
+        }
+        console.log(`WEBVIEWCOM:${phone}:Now consulting token: ${highestCompletedId}\n` +
+            `Current Queue length:${waitingCount}\n` +
+            `Thanks for using /stat\n`);
+    }
+
+    function generateRandomString(length) {
+        const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+        let result = '';
+        for (let i = 0; i < length; i++) {
+            result += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return result;
+    }
+</script>
+</body>
+</html>
