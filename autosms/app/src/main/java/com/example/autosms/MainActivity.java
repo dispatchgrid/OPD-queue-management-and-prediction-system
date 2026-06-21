@@ -115,7 +115,7 @@ public class MainActivity extends AppCompatActivity {
             webView.getSettings().setCacheMode(WebSettings.LOAD_NO_CACHE);
             webView.clearCache(true);
             webView.clearHistory();
-            webView.loadUrl("https://dispatchgrid.github.io/OQMPS/counter-mobile.html");
+            webView.loadUrl("https://dispatchgrid.github.io/OPD-queue-management-and-prediction-system/counter-mobile.html");
         }, 2000);
 
 
